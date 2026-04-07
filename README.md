@@ -30,6 +30,12 @@ For Arch Linux (which enforces PEP 668), you should use `pacman` to install the 
 sudo pacman -S python-fonttools
 ```
 
+**Windows users** — install `colorama` to get properly coloured output in PowerShell / cmd:
+```bash
+pip install colorama
+```
+Without it the output will still be correct but plain (no colours).
+
 ## Usage
 Simply place the script inside the directory containing the `.mkv` files you wish to process and run it. You can also place the script in your personal `bin` or `PATH` folder to run it from anywhere.
 

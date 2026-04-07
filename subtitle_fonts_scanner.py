@@ -31,6 +31,16 @@ except ImportError:
 # ── ANSI colour helpers ───────────────────────────────────────────────────────
 _USE_COLOUR = sys.stdout.isatty()
 
+# On Windows, ANSI escape codes are not processed by default.
+# colorama fixes this transparently when available; otherwise fall back to
+# plain text so the output is not cluttered with raw escape sequences.
+if sys.platform == "win32" and _USE_COLOUR:
+    try:
+        import colorama
+        colorama.init()
+    except ImportError:
+        _USE_COLOUR = False
+
 def _c(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m" if _USE_COLOUR else text
 
