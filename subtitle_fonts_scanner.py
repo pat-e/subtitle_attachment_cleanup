@@ -28,19 +28,6 @@ except ImportError:
     print("  (Arch Linux):  sudo pacman -S python-fonttools")
     sys.exit(1)
 
-# ── ANSI colour helpers ───────────────────────────────────────────────────────
-_USE_COLOUR = sys.stdout.isatty()
-
-def _c(code: str, text: str) -> str:
-    return f"\033[{code}m{text}\033[0m" if _USE_COLOUR else text
-
-def green(t):  return _c("32", t)
-def yellow(t): return _c("33", t)
-def red(t):    return _c("31", t)
-def bold(t):   return _c("1",  t)
-def cyan(t):   return _c("36", t)
-def dim(t):    return _c("2",  t)
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_ass_font_names(ass_path: Path) -> set[str]:
@@ -114,8 +101,8 @@ def safe_stem(name: str) -> str:
 
 def scan_mkv(mkv_path: Path) -> None:
     print()
-    print(bold(f"📦  Scanning: {mkv_path.name}"))
-    print(dim("─" * 60))
+    print(f"Scanning: {mkv_path.name}")
+    print("─" * 70)
 
     # ── 1. Read MKV metadata ─────────────────────────────────────────────────
     result = subprocess.run(
@@ -123,14 +110,14 @@ def scan_mkv(mkv_path: Path) -> None:
         capture_output=True, text=True, encoding="utf-8"
     )
     if result.returncode != 0:
-        print(red(f"  Error: mkvmerge could not read '{mkv_path.name}'."))
-        print(red(f"  {result.stderr.strip()}"))
+        print(f"ERROR: mkvmerge could not read '{mkv_path.name}'.")
+        print(f"  {result.stderr.strip()}")
         return
 
     try:
         mkv_info = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        print(red(f"  Error: failed to parse mkvmerge JSON output: {exc}"))
+        print(f"ERROR: failed to parse mkvmerge JSON output: {exc}")
         return
 
     tracks      = mkv_info.get("tracks", [])
@@ -155,15 +142,15 @@ def scan_mkv(mkv_path: Path) -> None:
     ]
 
     # ── 4. Report basic counts ───────────────────────────────────────────────
-    print(f"  ASS/SSA subtitle tracks : {cyan(str(len(ass_tracks)))}")
-    print(f"  Font attachments        : {cyan(str(len(font_attachments)))}")
+    print(f"  ASS/SSA subtitle tracks : {len(ass_tracks)}")
+    print(f"  Font attachments        : {len(font_attachments)}")
 
     if not ass_tracks:
-        print(yellow("\n  ⚠  No ASS/SSA subtitle tracks found — no font requirements to check."))
+        print("\n  WARNING: No ASS/SSA subtitle tracks found — no font requirements to check.")
         if not font_attachments:
-            print(yellow("     No font attachments either. Nothing to report."))
+            print("           No font attachments either. Nothing to report.")
         else:
-            print(yellow(f"     {len(font_attachments)} font attachment(s) present but no subtitles reference them."))
+            print(f"           {len(font_attachments)} font attachment(s) present but no subtitles reference them.")
             _list_embedded_fonts_only(font_attachments)
         return
 
@@ -184,11 +171,11 @@ def scan_mkv(mkv_path: Path) -> None:
 
         sub_result = subprocess.run(extract_sub_cmd, capture_output=True, text=True)
         if sub_result.returncode != 0:
-            print(red(f"  Error extracting subtitle tracks: {sub_result.stderr.strip()}"))
+            print(f"ERROR extracting subtitle tracks: {sub_result.stderr.strip()}")
             return
 
         # Collect required font names from each ASS file
-        print(f"\n  {bold('ASS tracks parsed:')}")
+        print(f"\n  ASS tracks parsed:")
         for ass_file in ass_temp_files:
             if not ass_file.exists():
                 continue
@@ -203,7 +190,7 @@ def scan_mkv(mkv_path: Path) -> None:
             if name:
                 label += f" – {name}"
             label += f" [{lang}]"
-            print(f"    {dim(label)}: {len(found)} font(s) referenced")
+            print(f"    {label}: {len(found)} font(s) referenced")
             required_fonts.update(found)
 
         # ── 6. Extract font attachments ──────────────────────────────────────
@@ -220,7 +207,7 @@ def scan_mkv(mkv_path: Path) -> None:
 
             att_result = subprocess.run(extract_att_cmd, capture_output=True, text=True)
             if att_result.returncode != 0:
-                print(red(f"  Error extracting font attachments: {att_result.stderr.strip()}"))
+                print(f"ERROR extracting font attachments: {att_result.stderr.strip()}")
             else:
                 for att in font_attachments:
                     temp_p: Path = att["_temp_path"]
@@ -257,9 +244,9 @@ def scan_mkv(mkv_path: Path) -> None:
 
 def _list_embedded_fonts_only(font_attachments: list) -> None:
     """Called when there are no ASS tracks — just list what's embedded."""
-    print(f"\n  {bold('Embedded font attachments:')}")
+    print(f"\n  Embedded font attachments:")
     for att in font_attachments:
-        print(f"    {dim('•')} {att['file_name']}  {dim('(' + att.get('content_type', '?') + ')')}")
+        print(f"    • {att['file_name']}  ({att.get('content_type', '?')})")
 
 
 def _print_report(
@@ -269,53 +256,53 @@ def _print_report(
     missing: set[str],
     extra: set[str],
 ) -> None:
-    sep = dim("─" * 60)
+    sep = "─" * 70
 
     # ── Needed fonts ─────────────────────────────────────────────────────────
-    print(f"\n  {bold('FONTS NEEDED BY SUBTITLES')}  ({len(required)} total)")
+    print(f"\n  FONTS NEEDED BY SUBTITLES  ({len(required)} total)")
     print(f"  {sep}")
     if required:
         for name in sorted(required):
-            status = green("✔  covered") if name not in missing else red("✘  MISSING")
+            status = "[OK]" if name not in missing else "[MISSING]"
             print(f"    {status}  {name}")
     else:
-        print(f"    {dim('(none)')}")
+        print(f"    (none)")
 
     # ── Embedded fonts ────────────────────────────────────────────────────────
-    print(f"\n  {bold('FONTS EMBEDDED IN MKV')}  ({len(embedded)} file(s))")
+    print(f"\n  FONTS EMBEDDED IN MKV  ({len(embedded)} file(s))")
     print(f"  {sep}")
     if embedded:
         for filename, internal_names in sorted(embedded.items()):
             is_used = filename in matched
-            tag  = green("[USED]  ") if is_used else yellow("[EXTRA] ")
+            tag  = "[USED]  " if is_used else "[EXTRA] "
             hits = matched.get(filename, [])
             line = f"    {tag}{filename}"
             if hits:
-                line += dim(f"  →  covers: {', '.join(hits)}")
+                line += f"  →  covers: {', '.join(hits)}"
             print(line)
             # Show internal name(s) for transparency
             for iname in sorted(internal_names)[:6]:
-                print(f"          {dim('internal name: ' + iname)}")
+                print(f"          internal name: {iname}")
             if len(internal_names) > 6:
-                print(f"          {dim(f'… and {len(internal_names) - 6} more')}")
+                print(f"          … and {len(internal_names) - 6} more")
     else:
-        print(f"    {dim('(none)')}")
+        print(f"    (none)")
 
     # ── Missing fonts ─────────────────────────────────────────────────────────
-    print(f"\n  {bold('MISSING FONTS')}  ({len(missing)} font(s) not embedded)")
+    print(f"\n  MISSING FONTS  ({len(missing)} font(s) not embedded)")
     print(f"  {sep}")
     if missing:
         for name in sorted(missing):
-            print(f"    {red('✘')}  {name}")
+            print(f"    ✘  {name}")
     else:
-        print(f"    {green('✔  All required fonts are present — nothing missing!')}")
+        print(f"    ✓ All required fonts are present — nothing missing!")
 
     # ── Extra (unused) embedded fonts ─────────────────────────────────────────
     if extra:
-        print(f"\n  {bold('EXTRA / UNUSED EMBEDDINGS')}  ({len(extra)} file(s) not needed by any subtitle)")
+        print(f"\n  EXTRA / UNUSED EMBEDDINGS  ({len(extra)} file(s) not needed by any subtitle)")
         print(f"  {sep}")
         for filename in sorted(extra):
-            print(f"    {yellow('⚠')}  {filename}")
+            print(f"    ⚠  {filename}")
 
     print()
 
@@ -325,16 +312,16 @@ def _print_report(
 def main() -> None:
     if len(sys.argv) < 2:
         print()
-        print(bold("subtitle_fonts_scanner.py"))
+        print("subtitle_fonts_scanner.py")
         print("─" * 40)
         print("  Scans an MKV file and reports which fonts are needed by")
         print("  ASS/SSA subtitles, which are already embedded, and which")
         print("  are missing.")
         print()
-        print(bold("Usage:"))
+        print("Usage:")
         print("  python subtitle_fonts_scanner.py <input.mkv>")
         print()
-        print(bold("Example:"))
+        print("Example:")
         print("  python subtitle_fonts_scanner.py \"My Show S01E01.mkv\"")
         print()
         sys.exit(1)
@@ -342,12 +329,12 @@ def main() -> None:
     mkv_path = Path(sys.argv[1])
 
     if not mkv_path.exists():
-        print(red(f"\nError: File not found: {mkv_path}"))
+        print(f"\nError: File not found: {mkv_path}")
         sys.exit(1)
 
     if mkv_path.suffix.lower() != ".mkv":
-        print(yellow(f"\nWarning: '{mkv_path.name}' does not have an .mkv extension."))
-        print(yellow("  This script is designed for MKV files. Proceeding anyway…"))
+        print(f"\nWarning: '{mkv_path.name}' does not have an .mkv extension.")
+        print("  This script is designed for MKV files. Proceeding anyway…")
 
     scan_mkv(mkv_path)
 
