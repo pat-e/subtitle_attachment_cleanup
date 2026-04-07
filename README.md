@@ -38,11 +38,77 @@ python subtitle_fonts_cleaner.py
 # If in your PATH, simply execute: subtitle_fonts_cleaner.py
 ```
 
+This is the main script and intended default workflow for batch cleanup.
+
 ### Folder Structure
 Upon execution, the script will create three folders in your working directory:
 - `temp_subs_fonts/` - A temporary directory used during processing (automatically deleted upon completion).
 - `original/` - Your original, unmodified `.mkv` files are safely moved here.
 - `finished/` - The new, lean `.mkv` files containing only the active ASS tracks, required font attachments, and original audio/video streams.
+
+## Supplemental Script: Font Scanner (Read-Only)
+This repository also includes `subtitle_fonts_scanner.py`, a companion script for inspection and reporting.
+
+Use the scanner when you want a dry-run style check before cleaning.
+It does not modify files and does not create output folders.
+
+### What the scanner reports
+- Number of ASS/SSA subtitle tracks detected
+- Number of embedded font attachments
+- Which fonts are required by subtitle styles and inline `\fn` overrides
+- Which required fonts are covered by current attachments
+- Which fonts are missing
+- Which embedded font attachments appear unused
+
+### Scanner usage
+Run it against a single MKV file:
+
+```bash
+python subtitle_fonts_scanner.py "input.mkv"
+# If in your PATH, simply execute: subtitle_fonts_scanner.py "input.mkv"
+```
+
+### Sample output
+Example (truncated):
+
+```text
+Scanning: Example Episode 01.mkv
+──────────────────────────────────────────────────────────────────────
+  ASS/SSA subtitle tracks : 2
+  Font attachments        : 15
+
+  ASS tracks parsed:
+    Track 2 [eng]: 1 font(s) referenced
+    Track 3 [ger]: 3 font(s) referenced
+
+  FONTS NEEDED BY SUBTITLES  (4 total)
+  ──────────────────────────────────────────────────────────────────────
+    [OK]  arial
+    [OK]  gandhi sans
+    [MISSING]  georgia bold
+    [OK]  times new roman bold
+
+  FONTS EMBEDDED IN MKV  (15 file(s))
+  ──────────────────────────────────────────────────────────────────────
+    [USED]  ARIALNB.TTF  ->  covers: arial
+    [EXTRA] AdobeArabic-Bold.otf
+    ...
+
+  MISSING FONTS  (1 font(s) not embedded)
+  ──────────────────────────────────────────────────────────────────────
+    ✘  georgia bold
+
+  EXTRA / UNUSED EMBEDDINGS  (10 file(s) not needed by any subtitle)
+  ──────────────────────────────────────────────────────────────────────
+    ⚠  AdobeArabic-Bold.otf
+    ⚠  comic.ttf
+    ...
+```
+
+### Typical workflow
+1. Run `subtitle_fonts_scanner.py` on a file to preview needed vs unused fonts.
+2. Run `subtitle_fonts_cleaner.py` to process all MKVs in the working directory.
+3. Optionally run the scanner again on a cleaned file to verify the result.
 
 ## License
 MIT License. See the [LICENSE](LICENSE) file for more details.
