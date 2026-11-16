@@ -1,17 +1,23 @@
 # Subtitle Attachment Cleanup
 
-A Python script to automatically clean up unnecessary font attachments from MKV video files. 
+A Python script to automatically clean up unnecessary font attachments from MKV video files.
 
-When you remove unwanted subtitle streams (like foreign languages) from an MKV using tools like MKVToolNix, the font files attached to those removed subtitles are typically left behind, needlessly inflating the file size. This script reads your MKV files, thoroughly inspects the remaining SSA/ASS subtitle tracks to discover which fonts are actually being used, and builds a new MKV file—leaving behind any orphaned or unused font attachments.
+When you remove unwanted subtitle streams (like foreign languages) from an MKV using tools like MKVToolNix, the font files attached to those removed subtitles are typically left behind, needlessly inflating the file size. This script reads your MKV files, inspects the remaining SSA/ASS subtitle tracks to discover which fonts are actually being used, and writes a new MKV without the unused font attachments.
 
 ## Features
-- Intelligently extracts and parses `.ass` / `.ssa` subtitle tracks from MKV containers.
-- Identifies both top-level font declarations (in `[V4+ Styles]`) and inline font overrides (in `[Events]`).
-- Uses deep metadata scanning (`fonttools`) to accurately match requested font families against attached font files, even if the attached files have cryptic filenames (e.g., `arialbd.ED3587CD.ttf`).
-- Safely preserves all non-font attachments (like cover images).
-- Automatically moves original MKVs to an `original/` backup folder and places the cleaned files in a `finished/` folder.
+
+- Parses `.ass` / `.ssa` tracks for font names on `Style` lines (`[V4 Styles]` and `[V4+ Styles]`) and for inline `\fn` overrides in `[Events]`. A leading `@` marks vertical text and is not part of the font name.
+- Reads every face inside `.ttf`, `.otf`, and `.ttc` files with fontTools. The whole file is kept when any face is used.
+- Matches family, subfamily, typographic family plus subfamily, full name, PostScript name, and variable-font named instances, using every language stored in the name table. `Bahnschrift Condensed` matches a later face in a collection, and a variable font whose named style is `Condensed`.
+- Ignores case, spaces, hyphens, and underscores, so `Bahnschrift Condensed`, `BahnschriftCondensed`, and `Bahnschrift-Condensed` are the same name. Cryptic filenames such as `arialbd.ED3587CD.ttf` are matched from the name table, not from the file name alone.
+- Drops a later attachment when its bytes are identical to one already kept (`CENTURY.TTF` and `Century.TTF`). Two files whose names differ only by case but whose contents differ, such as `Inkfree.ttf` and `InkFree.ttf`, are both kept and reported.
+- Keeps a font, and prints a warning, when the file cannot be read.
+- Leaves non-font attachments in place, such as cover images.
+- Leaves tracks, default flags, chapters, the title, and track names unchanged, including an empty title and blank track names.
+- Moves the originals to `original/` and writes cleaned files to `finished/`. If no font is removed, the file is copied unchanged.
 
 ## Prerequisites
+
 Ensure the following tools and libraries are installed and accessible in your system's PATH:
 
 1. **Python 3.x**
@@ -21,38 +27,67 @@ Ensure the following tools and libraries are installed and accessible in your sy
 Install the required Python dependency:
 
 For Windows or Ubuntu, you can use `pip`:
+
 ```bash
 pip install fonttools
 ```
 
 For Arch Linux (which enforces PEP 668), you should use `pacman` to install the system package:
+
 ```bash
 sudo pacman -S python-fonttools
 ```
 
 ## Usage
-Simply place the script inside the directory containing the `.mkv` files you wish to process and run it. You can also place the script in your personal `bin` or `PATH` folder to run it from anywhere.
+
+Run the script from the directory that contains the `.mkv` files. You can also put the script on your `PATH` and run it from that directory.
 
 ```bash
+python subtitle_fonts_cleaner.py --help
+python subtitle_fonts_cleaner.py --dry-run
 python subtitle_fonts_cleaner.py
-# If in your PATH, simply execute: subtitle_fonts_cleaner.py
 ```
 
-This is the main script and intended default workflow for batch cleanup.
+`--help` prints the usage text and exits.
 
-### Folder Structure
-Upon execution, the script will create three folders in your working directory:
-- `temp_subs_fonts/` - A temporary directory used during processing (automatically deleted upon completion).
-- `original/` - Your original, unmodified `.mkv` files are safely moved here.
-- `finished/` - The new, lean `.mkv` files containing only the active ASS tracks, required font attachments, and original audio/video streams.
+`--dry-run` prints `KEEP` or `REMOVE` for every font attachment, with the reason, and lists every requested font that matched nothing. It does not write or move files, and it does not create `original/` or `finished/`.
 
-## Supplemental Script: Font Scanner (Read-Only)
+This is the main script and the intended workflow for batch cleanup.
+
+### Folder structure
+
+A real run uses these folders in the working directory:
+
+- `temp_subs_fonts/` — scratch space while attachments are inspected. The script removes it at the end of the run when the folder is empty.
+- `original/` — the unmodified `.mkv` files, moved here after a successful clean.
+- `finished/` — the cleaned `.mkv` files: the original tracks, chapters, and non-font attachments, plus only the fonts the subtitles use.
+
+### Sample dry-run
+
+```text
+Processing: Example Episode 01.mkv
+  ASS/SSA tracks: 1
+  Font attachments: 5
+  Requested fonts (2): Bahnschrift Condensed, Century
+  KEEP   1 BahnschriftCondensed.ttc - matches requested font "Bahnschrift Condensed"
+  KEEP   2 BahnschriftCondensed-VariableCollection.ttc - matches requested font "Bahnschrift Condensed"
+  KEEP   3 CENTURY.TTF - matches requested font "Century"
+  REMOVE 4 Century.TTF - duplicate of "CENTURY.TTF" (identical content)
+  REMOVE 5 Comic.ttf - not used by any subtitle
+  Requested fonts with no matching attachment:
+    - Not Embedded
+  Fonts: keep 3, remove 2
+  Dry run: no files were written or moved.
+```
+
+## Supplemental script: font scanner (read-only)
+
 This repository also includes `subtitle_fonts_scanner.py`, a companion script for inspection and reporting.
 
-Use the scanner when you want a dry-run style check before cleaning.
-It does not modify files and does not create output folders.
+Use the cleaner's `--dry-run` to preview a whole folder. Use the scanner when you want a per-track report for one file. The scanner does not modify files and does not create output folders.
 
 ### What the scanner reports
+
 - Number of ASS/SSA subtitle tracks detected
 - Number of embedded font attachments
 - Which fonts are required by subtitle styles and inline `\fn` overrides
@@ -61,6 +96,7 @@ It does not modify files and does not create output folders.
 - Which embedded font attachments appear unused
 
 ### Scanner usage
+
 Run it against a single MKV file:
 
 ```bash
@@ -69,6 +105,7 @@ python subtitle_fonts_scanner.py "input.mkv"
 ```
 
 ### Sample output
+
 Example (truncated):
 
 ```text
@@ -106,9 +143,12 @@ Scanning: Example Episode 01.mkv
 ```
 
 ### Typical workflow
-1. Run `subtitle_fonts_scanner.py` on a file to preview needed vs unused fonts.
-2. Run `subtitle_fonts_cleaner.py` to process all MKVs in the working directory.
-3. Optionally run the scanner again on a cleaned file to verify the result.
+
+1. Run `subtitle_fonts_cleaner.py --dry-run` in the episode folder to see which fonts would be kept or removed.
+2. Optionally run `subtitle_fonts_scanner.py` on one file for a per-track report.
+3. Run `subtitle_fonts_cleaner.py` to process every MKV in the working directory.
+4. Optionally run the scanner again on a file in `finished/` to verify the result.
 
 ## License
+
 MIT License. See the [LICENSE](LICENSE) file for more details.
