@@ -84,16 +84,20 @@ Processing: Example Episode 01.mkv
 
 This repository also includes `subtitle_fonts_scanner.py`, a companion script for inspection and reporting.
 
-Use the cleaner's `--dry-run` to preview a whole folder. Use the scanner when you want a per-track report for one file. The scanner does not modify files and does not create output folders.
+Use the cleaner's `--dry-run` to preview a whole folder. Use the scanner when you want a per-track report for one file. The scanner uses the same font matching as the cleaner: every face, variable-font named instances, and names compared without case, spaces, hyphens, or underscores. It does not modify files and does not create output folders.
 
 ### What the scanner reports
 
-- Number of ASS/SSA subtitle tracks detected
-- Number of embedded font attachments
-- Which fonts are required by subtitle styles and inline `\fn` overrides
-- Which required fonts are covered by current attachments
-- Which fonts are missing
-- Which embedded font attachments appear unused
+- How many ASS/SSA tracks and font attachments the file contains. Non-font attachments, such as cover images, are left out of the report.
+- The fonts each track requests, spelled the way the subtitle writes them. A leading `@` stays in this list.
+- `[OK]` when a requested font matches an embedded file, and `[MISSING]` when it does not.
+- Each readable font file, followed by up to six internal names.
+- `[USED]` when a face or the file name matches a request. The covers line drops a leading `@`.
+- `[EXTRA]` when no subtitle uses that file. These files are listed again as unused embeddings.
+- `[DUPLICATE]` when the bytes match an earlier file that is kept. The cleaner would remove this copy.
+- `[KEPT]` when the file could not be read. The cleaner would keep it, and it does not satisfy a request.
+- `Fonts: keep N, remove M`, the same counts the cleaner would use.
+- A warning when two file names differ only by case but the contents differ, and when a matched file could not be read in full.
 
 ### Scanner usage
 
@@ -106,40 +110,49 @@ python subtitle_fonts_scanner.py "input.mkv"
 
 ### Sample output
 
-Example (truncated):
-
 ```text
 Scanning: Example Episode 01.mkv
 ──────────────────────────────────────────────────────────────────────
   ASS/SSA subtitle tracks : 2
-  Font attachments        : 15
+  Font attachments        : 6
 
   ASS tracks parsed:
-    Track 2 [eng]: 1 font(s) referenced
-    Track 3 [ger]: 3 font(s) referenced
+    Track 2 – Signs [eng]: 3 font(s) referenced
+    Track 3 [ger]: 1 font(s) referenced
 
   FONTS NEEDED BY SUBTITLES  (4 total)
   ──────────────────────────────────────────────────────────────────────
-    [OK]  arial
-    [OK]  gandhi sans
-    [MISSING]  georgia bold
-    [OK]  times new roman bold
+    [OK]  Bahnschrift Condensed
+    [OK]  Century
+    [MISSING]  Not Embedded
+    [OK]  @Vertical Gothic
 
-  FONTS EMBEDDED IN MKV  (15 file(s))
+  FONTS EMBEDDED IN MKV  (6 file(s))
   ──────────────────────────────────────────────────────────────────────
-    [USED]  ARIALNB.TTF  ->  covers: arial
-    [EXTRA] AdobeArabic-Bold.otf
-    ...
+    [USED]       BahnschriftCondensed.ttc  →  covers: Bahnschrift Condensed
+               internal name: Bahnschrift
+               internal name: Condensed
+    [USED]       CENTURY.TTF  →  covers: Century
+               internal name: Century
+    [DUPLICATE]  Century.TTF
+               duplicate of "CENTURY.TTF" (identical content)
+               internal name: Century
+    [EXTRA]      Comic.ttf
+               internal name: Comic Sans MS
+    [USED]       Vertical.otf  →  covers: Vertical Gothic
+               internal name: Vertical Gothic
+    [KEPT]       broken.ttf
+               WARNING: could not read font (Not a TrueType or OpenType font (not enough data)); keeping it
 
   MISSING FONTS  (1 font(s) not embedded)
   ──────────────────────────────────────────────────────────────────────
-    ✘  georgia bold
+    ✘  Not Embedded
 
-  EXTRA / UNUSED EMBEDDINGS  (10 file(s) not needed by any subtitle)
+  EXTRA / UNUSED EMBEDDINGS  (1 file(s) not needed by any subtitle)
   ──────────────────────────────────────────────────────────────────────
-    ⚠  AdobeArabic-Bold.otf
-    ⚠  comic.ttf
-    ...
+    ⚠  Comic.ttf
+
+  Fonts: keep 4, remove 2
 ```
 
 ### Typical workflow
